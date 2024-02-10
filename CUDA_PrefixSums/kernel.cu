@@ -1,6 +1,7 @@
 ﻿#include <iostream>
 #include <fstream>
 #include <cmath>
+#include <random>
 
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
@@ -8,8 +9,9 @@
 using namespace std;
 
 // CUDA 核心函數，使用 shared memory 進行前綴和計算
-__global__  void prefixSum_divide(int* input, int* output, int n) {
+__global__  void prefixSum_divide(int* input, int* output) {
 	extern __shared__ int temp[];  // Shared memory for intermediate results
+	int n = blockDim.x;
 	int tid = threadIdx.x;
 	int sid = blockIdx.x * n + tid;
 	int pout = 0, pin = 1;  // Ping-pong buffers for in-place scan
@@ -30,8 +32,10 @@ __global__  void prefixSum_divide(int* input, int* output, int n) {
 	output[sid] = temp[pout * n + tid];
 }
 
-__global__ void add_lastValue(int* output, int last_value_idx, int value_idx) {
-	output[value_idx + threadIdx.x] += output[last_value_idx];
+__global__ void add_lastValue(int* output, int last_value_idx) {
+	int tid = threadIdx.x;
+	int sid = blockIdx.x * blockDim.x + tid;
+	output[last_value_idx + 1 + sid] += output[last_value_idx];
 }
 
 __global__  void prefixSum_conquer(int* output, int n, int numBlocks) {
@@ -52,29 +56,32 @@ __global__  void prefixSum_conquer(int* output, int n, int numBlocks) {
 			// 奇數block最後一個數值的 index
 			int last_value_idx = j * n - 1;
 
-			// 因為每次合併會是上次的兩倍，但一次只能相加 n 筆資料，所以需要個迴圈 k 去相加後面 mergeSize 次
-			for (int k = 0; k < mergeSize; k++) {
-				//printf("i=%d, j=%d, ,k=%d, j*n-1=%d, (j+k)*n=%d~%d\n", i, j, k, j * n - 1, (j + k) * n, (j + k) * n + 1024);
-
-				// 要相加的啟始index
-				int value_idx = (j + k) * n; 
-
-				// 執行 n 個threads, 同時計算last_value與後面 n 個值相加
-				add_lastValue << <1, n >> > (output, last_value_idx, value_idx);
-			}
-			
+			// 將奇數block的最後一個數值與後面 mergeSize*n 個數值相加
+			add_lastValue << <mergeSize, n >> > (output, last_value_idx);
 		}
 		__syncthreads();
 	}
 }
 
-__global__ void prefixSum_kernal(int* input, int* output, int N) {
-	int threadsPerBlock = (N < 1024) ? N : 1024;
-	int numBlocks = (N % threadsPerBlock == 0) ? N / threadsPerBlock : N / threadsPerBlock + 1;
-	prefixSum_divide << <numBlocks, threadsPerBlock, threadsPerBlock * 2 * sizeof(int) >> > (input, output, threadsPerBlock);
+__global__ void prefixSum_kernal(int* input, int* output, int N, int maxThreadsPerBlock) {
+	int threadsPerBlock = (N < maxThreadsPerBlock) ? N : maxThreadsPerBlock;
+	int numBlocks = (N + threadsPerBlock -1) / threadsPerBlock;
+	//int numBlocks = (N % threadsPerBlock == 0) ? N / threadsPerBlock : N / threadsPerBlock + 1;
+	//printf("A=%d, B=%d", numBlocks2, numBlocks);
+	prefixSum_divide << <numBlocks, threadsPerBlock, threadsPerBlock * 2 * sizeof(int) >> > (input, output);
 	prefixSum_conquer << <1, 1 >> > (output, threadsPerBlock, numBlocks);
 }
 
+// 產生亂數陣列
+void generateRandom(int array[], int size, int min, int max) {
+	random_device rd;  // 隨機數種子
+	mt19937 gen(rd()); // 使用 Mersenne Twister 算法
+	uniform_int_distribution<> dis(min, max); // 定義均勻分佈
+
+	for (int i = 0; i < size; ++i) {
+		array[i] = dis(gen); // 產生隨機數並寫入陣列中
+	}
+}
 
 // CPU 的 prefixSum
 void prefixSum_cpu(int* input, int* output, int n) {
@@ -102,7 +109,7 @@ bool areArraysEqual(int* arr1, int* arr2, int n) {
 
 int main() {
 
-	const int N = 1 << 25; // 根據您的需求調整大小
+	const int N = 1 << 14; // 根據您的需求調整大小
 
 	// 在主機上分配記憶體
 	int* h_input = new int[N];
@@ -115,26 +122,28 @@ int main() {
 	cudaMalloc((void**)&d_output, N * sizeof(int));
 
 
-	// 初始化輸入數組
-	for (int i = 0; i < N; ++i) {
-		h_input[i] = 1; // 您可以使用您自己的值進行初始化
-	}
+	// 初始化輸入陣列
+	//for (int i = 0; i < N; ++i) {
+	//	h_input[i] = 1; 
+	//}
+
+	// 產生亂數陣列
+	generateRandom(h_input, N, 0, 100);
 
 	// 將輸入數組複製到設備
 	cudaMemcpy(d_input, h_input, N * sizeof(int), cudaMemcpyHostToDevice);
 
-	//int threadSize = (N < 1024) ? N : 1024;
+	// 獲取當前 CUDA 設備的 ID
+	int deviceId;
+	cudaGetDevice(&deviceId);
 
-	// 設置網格維度
-	//int blockSize = (N % threadSize == 0) ? N / threadSize : N / threadSize + 1;
+	// 獲取硬體的靜態限制每個線程塊可容納的最大線程數
+	int maxThreadsPerBlock;
+	cudaDeviceGetAttribute(&maxThreadsPerBlock, cudaDevAttrMaxThreadsPerBlock, deviceId);
 
-	// 運行核心函數，使用 shared memory 進行前綴和計算
-	//prefixSum << <gridSize, blockSize, N * sizeof(int) >> > (d_input, d_output, N);
-	//prefixSum<<<blockSize, threadSize, threadSize * 2 * sizeof(int)>>>(d_input, d_input, threadSize);
+	prefixSum_kernal << < 1, 1 >> > (d_input, d_input, N, maxThreadsPerBlock);
 
-	prefixSum_kernal << < 1, 1 >> > (d_input, d_input, N);
-
-	// 等待GPU執行完畢
+	// // 同步所有 CUDA kernel 的執行
 	cudaDeviceSynchronize();
 
 	// 從設備將結果複製回主機
@@ -152,12 +161,12 @@ int main() {
 	}
 
 	// 將結果寫入檔案
-	//ofstream prefixsumsFile("prefix_sums.txt");
-	//for (int i = 0; i < N; ++i) {
-	//	prefixsumsFile << h_output[i] << endl;
-	//}
-	//prefixsumsFile.close();
-	//cout << "the result of prefix sums 'prefix_sums.txt' created successfully." << endl;
+	ofstream prefixsumsFile("prefix_sums.txt");
+	for (int i = 0; i < N; ++i) {
+		prefixsumsFile << h_output[i] << endl;
+	}
+	prefixsumsFile.close();
+	cout << "the result of prefix sums 'prefix_sums.txt' created successfully." << endl;
 
 
 	// 釋放記憶體
