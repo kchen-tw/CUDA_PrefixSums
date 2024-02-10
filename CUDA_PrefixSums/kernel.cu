@@ -66,8 +66,7 @@ __global__  void prefixSum_conquer(int* output, int n, int numBlocks) {
 __global__ void prefixSum_kernal(int* input, int* output, int N, int maxThreadsPerBlock) {
 	int threadsPerBlock = (N < maxThreadsPerBlock) ? N : maxThreadsPerBlock;
 	int numBlocks = (N + threadsPerBlock -1) / threadsPerBlock;
-	//int numBlocks = (N % threadsPerBlock == 0) ? N / threadsPerBlock : N / threadsPerBlock + 1;
-	//printf("A=%d, B=%d", numBlocks2, numBlocks);
+
 	prefixSum_divide << <numBlocks, threadsPerBlock, threadsPerBlock * 2 * sizeof(int) >> > (input, output);
 	prefixSum_conquer << <1, 1 >> > (output, threadsPerBlock, numBlocks);
 }
