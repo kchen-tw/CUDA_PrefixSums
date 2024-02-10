@@ -1,9 +1,9 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
-VisualStudioVersion = 17.7.34221.43
+VisualStudioVersion = 17.8.34330.188
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "PrefixSums", "PrefixSums\PrefixSums.vcxproj", "{3FCAABCF-7728-42D0-9A76-7917B69C4D90}"
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CUDA_PrefixSums", "CUDA_PrefixSums\CUDA_PrefixSums.vcxproj", "{3ADC3CAE-EF1C-4A3E-8815-4156171CA490}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -11,15 +11,15 @@ Global
 		Release|x64 = Release|x64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{3FCAABCF-7728-42D0-9A76-7917B69C4D90}.Debug|x64.ActiveCfg = Debug|x64
-		{3FCAABCF-7728-42D0-9A76-7917B69C4D90}.Debug|x64.Build.0 = Debug|x64
-		{3FCAABCF-7728-42D0-9A76-7917B69C4D90}.Release|x64.ActiveCfg = Release|x64
-		{3FCAABCF-7728-42D0-9A76-7917B69C4D90}.Release|x64.Build.0 = Release|x64
+		{3ADC3CAE-EF1C-4A3E-8815-4156171CA490}.Debug|x64.ActiveCfg = Debug|x64
+		{3ADC3CAE-EF1C-4A3E-8815-4156171CA490}.Debug|x64.Build.0 = Debug|x64
+		{3ADC3CAE-EF1C-4A3E-8815-4156171CA490}.Release|x64.ActiveCfg = Release|x64
+		{3ADC3CAE-EF1C-4A3E-8815-4156171CA490}.Release|x64.Build.0 = Release|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
-		SolutionGuid = {D91935CA-644A-4BC7-8D2B-FFA43A66E3B2}
+		SolutionGuid = {548F2BBD-6F6D-4436-8022-855ACB61618A}
 	EndGlobalSection
 EndGlobal
