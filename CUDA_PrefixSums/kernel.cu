@@ -7,8 +7,6 @@
 
 using namespace std;
 
-
-
 // CUDA 核心函數，使用 shared memory 進行前綴和計算
 __global__  void prefixSum_divide(int* input, int* output, int n) {
 	extern __shared__ int temp[];  // Shared memory for intermediate results
@@ -40,7 +38,7 @@ __global__  void prefixSum_conquer(int* output, int n, int numBlocks) {
 	
 	// 合併的次數
 	int numConquer = log2((double)numBlocks);
-	//numConquer = 3;
+	//numConquer = 5;
 	for (int i = 1; i <= numConquer; i++) {
 		// 每次合併的 size 會是上次的兩倍
 		int mergeSize = 1 << (i - 1);
@@ -78,7 +76,6 @@ __global__ void prefixSum_kernal(int* input, int* output, int N) {
 }
 
 
-
 // CPU 的 prefixSum
 void prefixSum_cpu(int* input, int* output, int n) {
 	if (n <= 0) {
@@ -105,8 +102,7 @@ bool areArraysEqual(int* arr1, int* arr2, int n) {
 
 int main() {
 
-	const int N = 1 << 15; // 根據您的需求調整大小
-
+	const int N = 1 << 25; // 根據您的需求調整大小
 
 	// 在主機上分配記憶體
 	int* h_input = new int[N];
@@ -138,30 +134,30 @@ int main() {
 
 	prefixSum_kernal << < 1, 1 >> > (d_input, d_input, N);
 
-
+	// 等待GPU執行完畢
 	cudaDeviceSynchronize();
 
 	// 從設備將結果複製回主機
 	cudaMemcpy(h_output, d_input, N * sizeof(int), cudaMemcpyDeviceToHost);
 
 	//用CPU計算 prefixSums
-	//prefixSum_cpu(h_input, h_output_cpu, N);
+	prefixSum_cpu(h_input, h_output_cpu, N);
 
 	// 比較cpu與gpu計算內容是否相同
-	//if (areArraysEqual(h_output, h_output_cpu, N)) {
-	//    cout << "CPU and GPU are equal.\n";
-	//}
-	//else {
-	//    cout << "CPU and GPU are not equal.\n";
-	//}
+	if (areArraysEqual(h_output, h_output_cpu, N)) {
+	    cout << "CPU and GPU are equal.\n";
+	}
+	else {
+	    cout << "CPU and GPU are not equal.\n";
+	}
 
 	// 將結果寫入檔案
-	ofstream prefixsumsFile("prefix_sums.txt");
-	for (int i = 0; i < N; ++i) {
-		prefixsumsFile << h_output[i] << endl;
-	}
-	prefixsumsFile.close();
-	cout << "the result of prefix sums 'prefix_sums.txt' created successfully." << endl;
+	//ofstream prefixsumsFile("prefix_sums.txt");
+	//for (int i = 0; i < N; ++i) {
+	//	prefixsumsFile << h_output[i] << endl;
+	//}
+	//prefixsumsFile.close();
+	//cout << "the result of prefix sums 'prefix_sums.txt' created successfully." << endl;
 
 
 	// 釋放記憶體
