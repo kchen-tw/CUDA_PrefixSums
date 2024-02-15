@@ -2,6 +2,8 @@
 #include <fstream>
 #include <cmath>
 #include <random>
+#include <sstream>
+#include <string>
 
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
@@ -39,11 +41,10 @@ __global__ void add_lastValue(int* output, int last_value_idx) {
 }
 
 __global__  void prefixSum_conquer(int* output, int n, int numBlocks) {
-	
+
 	// 合併的次數
-	int numConquer = log2((double)numBlocks);
-	//numConquer = 5;
-	for (int i = 1; i <= numConquer; i++) {
+	int numConquer = log2((double)numBlocks) + 0.5;
+	for (int i = 1; i <= (int)numConquer; i++) {
 		// 每次合併的 size 會是上次的兩倍
 		int mergeSize = 1 << (i - 1);
 
@@ -52,7 +53,7 @@ __global__  void prefixSum_conquer(int* output, int n, int numBlocks) {
 		// i=2, j=2,6,10,14,...
 		// i=3, j=4,12,20,28,...
 		for (int j = mergeSize; j < numBlocks; j += 2 * mergeSize) {
-			
+
 			// 奇數block最後一個數值的 index
 			int last_value_idx = j * n - 1;
 
@@ -65,7 +66,7 @@ __global__  void prefixSum_conquer(int* output, int n, int numBlocks) {
 
 __global__ void prefixSum_kernal(int* input, int* output, int N, int maxThreadsPerBlock) {
 	int threadsPerBlock = (N < maxThreadsPerBlock) ? N : maxThreadsPerBlock;
-	int numBlocks = (N + threadsPerBlock -1) / threadsPerBlock;
+	int numBlocks = (N + threadsPerBlock - 1) / threadsPerBlock;
 
 	prefixSum_divide << <numBlocks, threadsPerBlock, threadsPerBlock * 2 * sizeof(int) >> > (input, output);
 	prefixSum_conquer << <1, 1 >> > (output, threadsPerBlock, numBlocks);
@@ -97,18 +98,29 @@ void prefixSum_cpu(int* input, int* output, int n) {
 }
 
 // 比較兩個陣列是否相同0
-bool areArraysEqual(int* arr1, int* arr2, int n) {
+int areArraysEqual(int* arr1, int* arr2, int n) {
 	for (int i = 0; i < n; ++i) {
 		if (arr1[i] != arr2[i]) {
-			return false;  // 一旦發現不同，就返回 false
+			return i;  // // 返回第一次出现错误的位置
 		}
 	}
-	return true;  // 如果全部元素都相同，返回 true
+	return 0;  // 如果全部元素都相同，返回 0
 }
 
-int main() {
+int main(int argc, char* argv[]) {
+	int n = 15;
 
-	const int N = 1 << 14; // 根據您的需求調整大小
+	// 檢查是否有提供命令列參數
+	if (argc > 1) {
+		// 將第一個命令列參數轉換為整數
+		n = atoi(argv[1]);
+	}
+	//else {
+	//	// 如果沒有提供命令列參數，設定 N 為預設值 20
+	//	n = 20;
+	//}
+	cout << "N=2^" << n << " ";
+	int N = 1 << n; // 根據您的需求調整大小
 
 	// 在主機上分配記憶體
 	int* h_input = new int[N];
@@ -122,12 +134,12 @@ int main() {
 
 
 	// 初始化輸入陣列
-	//for (int i = 0; i < N; ++i) {
-	//	h_input[i] = 1; 
-	//}
+	for (int i = 0; i < N; ++i) {
+		h_input[i] = 1;
+	}
 
 	// 產生亂數陣列
-	generateRandom(h_input, N, 0, 100);
+	//generateRandom(h_input, N, 0, 100);
 
 	// 將輸入數組複製到設備
 	cudaMemcpy(d_input, h_input, N * sizeof(int), cudaMemcpyHostToDevice);
@@ -142,7 +154,7 @@ int main() {
 
 	prefixSum_kernal << < 1, 1 >> > (d_input, d_input, N, maxThreadsPerBlock);
 
-	// // 同步所有 CUDA kernel 的執行
+	// 同步所有 CUDA kernel 的執行
 	cudaDeviceSynchronize();
 
 	// 從設備將結果複製回主機
@@ -152,20 +164,22 @@ int main() {
 	prefixSum_cpu(h_input, h_output_cpu, N);
 
 	// 比較cpu與gpu計算內容是否相同
-	if (areArraysEqual(h_output, h_output_cpu, N)) {
-	    cout << "CPU and GPU are equal.\n";
+	int compareresult = areArraysEqual(h_output, h_output_cpu, N);
+	if (compareresult == 0) {
+		cout << "CPU and GPU are equal." << endl;
 	}
 	else {
-	    cout << "CPU and GPU are not equal.\n";
+		cout << "CPU and GPU are not equal. first error = " << compareresult << endl;
 	}
 
+	string strFilename = "prefix_sums_" + to_string(N) + ".txt";
 	// 將結果寫入檔案
-	ofstream prefixsumsFile("prefix_sums.txt");
+	ofstream prefixsumsFile(strFilename);
 	for (int i = 0; i < N; ++i) {
 		prefixsumsFile << h_output[i] << endl;
 	}
 	prefixsumsFile.close();
-	cout << "the result of prefix sums 'prefix_sums.txt' created successfully." << endl;
+	cout << "'"<< strFilename <<"' created successfully." << endl;
 
 
 	// 釋放記憶體
